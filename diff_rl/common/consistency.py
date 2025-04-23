@@ -168,7 +168,7 @@ class Consistency_Model:
     def sample_log_prob(self, model, state, x0_target=None, N=50, sigma=0.1):
         # Step 1: sample N actions under same state
         state_repeat = state.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
-        samples = self.batch_multi_sample(model, state_repeat)  # [B, N, action_dim]
+        samples = self.batch_multi_sample(model, state_repeat).detach()  # [B, N, action_dim]
 
         # Step 2: get target action x0 (either sample or user-provided)
         if x0_target is None:
@@ -184,34 +184,6 @@ class Consistency_Model:
 
         return x0_target, log_prob  # log_prob: [B]
     
-    def kde_log_prob(self, data, new_samples, bandwidth=0.5, epsilon=1e-8):
-        """
-        data: (batch_size, n_samples, n_features)
-        new_samples: (batch_size, 1, n_features)
-        bandwidth: Scalar value for the Gaussian kernel bandwidth
-        epsilon: Small value to ensure numerical stability
-        """
-        # 计算新样本和数据的差值
-        diff = new_samples - data  # 计算逐对差值
-        distances = th.sum(diff**2, dim=-1)  # 欧氏距离的平方
-
-        # 限制距离避免在计算 exp 时数值溢出
-        distances = th.clamp(distances, max=1e8)
-        kernel_values = th.exp(-distances / (2 * bandwidth**2))  # 高斯核函数
-
-        # 计算归一化因子
-        normalization_factor = (bandwidth * (2 * th.pi)**0.5)**data.shape[-1]
-
-        # 计算概率，加入 epsilon 避免数值问题
-        probs = kernel_values.sum(dim=-1) / (data.shape[1] * normalization_factor + epsilon)
-        probs = th.clamp(probs, min=epsilon)  # 避免 log(0)
-
-        log_probs = th.log(probs)  # 计算 log 概率
-        return log_probs
     
-    def kde_prob(self, state, action, model):
-        state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=50, dim=1).detach()
-        scaled_actions = self.batch_multi_sample(model=model, state=state_rpt).detach()
-        log_probs = self.kde_log_prob(scaled_actions, action.unsqueeze(1), bandwidth=0.5)
-        return log_probs.unsqueeze(1).detach()
+
         
