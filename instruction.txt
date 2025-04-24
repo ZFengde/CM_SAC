@@ -1,5 +1,7 @@
 TD3 modified version with CM, this one definitely works! Don't mess up!
 
+has already check the log_prob result with using sklearn-kde method, it's the same
+
 熵系数变大：当前策略的熵小于目标熵（huber_distance 小于 self.target_huber_distance），策略需要增加随机性。
 熵系数变小：当前策略的熵大于目标熵（huber_distance 大于 self.target_huber_distance），策略需要减少随机性。
 

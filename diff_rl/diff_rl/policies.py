@@ -226,7 +226,7 @@ class MLP(nn.Module):
 
         t = self.time_mlp(time)
         if state.dim() == 3: # TODO, be careful here, cuz it can only repeat 50 times
-            t = th.repeat_interleave(t.unsqueeze(1), repeats=50, dim=1)
+            t = th.repeat_interleave(t.unsqueeze(1), repeats=100, dim=1)
         if state is not None:
             x = th.cat([x, t, state], dim=-1)
         else:
