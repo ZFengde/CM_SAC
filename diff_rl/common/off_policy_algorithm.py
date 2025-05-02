@@ -298,14 +298,8 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             assert self._last_obs is not None, "self._last_obs was not set"
 
             state = th.FloatTensor(self._last_obs.reshape(1, -1)).to(self.device)
-            state_rpt = th.repeat_interleave(state, repeats=50, dim=0)
-
             # This is sample from consistency model
-            scaled_action = self.consistency_model.sample(model=self.actor, state=state_rpt)
-            q_value = self.critic_target.q1_forward(state_rpt, scaled_action).flatten()
-            soft_q_value = F.softmax(q_value, dim=0)
-            idx = th.multinomial(soft_q_value, num_samples=1) # this mechanism works a bit since all q-values are similar
-            scaled_action = scaled_action[idx].cpu().data.numpy()
+            scaled_action = self.consistency_model.sample(model=self.actor, state=state).cpu().data.numpy()
 
         if isinstance(self.action_space, spaces.Box):
 

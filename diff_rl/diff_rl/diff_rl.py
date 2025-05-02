@@ -162,6 +162,7 @@ class TD3(OffPolicyAlgorithm):
                 next_actions, next_log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.next_observations)
             
                 # Compute the next Q-values: min over all critics targets
+                # TODO, here can try to use a batch of actions for next Q
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
@@ -195,7 +196,9 @@ class TD3(OffPolicyAlgorithm):
                                               )
                 bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
 
+                # This two can be merged into one function and reuse the batched samples
                 actor_loss = bc_losses["consistency_losses"] + (0.3 * log_prob).mean()
+                # actor_loss = bc_losses["consistency_losses"]
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor
@@ -211,12 +214,12 @@ class TD3(OffPolicyAlgorithm):
             
         self._n_updates += gradient_steps
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
-        self.logger.record("train/ent_coef", np.mean(ent_coefs))
+        # self.logger.record("train/ent_coef", np.mean(ent_coefs))
         if len(actor_losses) > 0:
             self.logger.record("train/actor_loss", np.mean(actor_losses))
         self.logger.record("train/critic_loss", np.mean(critic_losses))
-        if len(ent_coef_losses) > 0:
-            self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
+        # if len(ent_coef_losses) > 0:
+        #     self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
 
     def learn(
         self: SelfTD3,
