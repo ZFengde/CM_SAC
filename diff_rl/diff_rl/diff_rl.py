@@ -166,7 +166,7 @@ class TD3(OffPolicyAlgorithm):
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
-                next_q_values = next_q_values - 0.3 * next_log_prob.reshape(-1, 1)
+                next_q_values = next_q_values - 0.1 * next_log_prob.reshape(-1, 1)
 
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
@@ -197,7 +197,7 @@ class TD3(OffPolicyAlgorithm):
                 bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
 
                 # This two can be merged into one function and reuse the batched samples
-                actor_loss = bc_losses["consistency_losses"] + (0.3 * log_prob).mean()
+                actor_loss = bc_losses["consistency_losses"] + (0.1 * log_prob).mean()
                 # actor_loss = bc_losses["consistency_losses"]
                 actor_losses.append(actor_loss.item())
 
