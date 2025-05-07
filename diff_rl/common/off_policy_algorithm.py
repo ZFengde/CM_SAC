@@ -48,7 +48,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         stats_window_size: int = 100,
         tensorboard_log: Optional[str] = None,
         verbose: int = 0,
-        device: Union[th.device, str] = "auto",
+        device: Union[th.device, str] = "cuda",
         support_multi_env: bool = False,
         monitor_wrapper: bool = True,
         seed: Optional[int] = None,

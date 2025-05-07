@@ -2,6 +2,7 @@ import diff_rl
 import os
 from datetime import datetime
 from stable_baselines3.common.env_util import make_vec_env
+import torch
 
 def main(env_id,
 		algo,
@@ -10,7 +11,8 @@ def main(env_id,
 		seed,
 		learning_rate,
 		specified_log_name):
-
+	
+	print(torch.cuda.is_available()) 
 	algo_name = algo
 	log_name = algo_name
 	algo = eval('diff_rl.'+ algo)
