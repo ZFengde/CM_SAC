@@ -12,7 +12,6 @@ def main(env_id,
 		learning_rate,
 		specified_log_name):
 	
-	print(torch.cuda.is_available()) 
 	algo_name = algo
 	log_name = algo_name
 	algo = eval('diff_rl.'+ algo)

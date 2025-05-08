@@ -166,7 +166,7 @@ class TD3(OffPolicyAlgorithm):
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
-                next_q_values = next_q_values - 0.1 * next_log_prob.reshape(-1, 1)
+                # next_q_values = next_q_values - 0.1 * next_log_prob.reshape(-1, 1)
 
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
@@ -198,7 +198,8 @@ class TD3(OffPolicyAlgorithm):
 
                 q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
                 min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-                actor_loss = (0.3 * log_prob- min_qf_pi).mean()
+                # actor_loss = (0.3 * log_prob- min_qf_pi).mean()
+                actor_loss = (- min_qf_pi).mean()
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor
