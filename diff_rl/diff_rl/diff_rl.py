@@ -56,7 +56,7 @@ class TD3(OffPolicyAlgorithm):
         policy_kwargs: Optional[Dict[str, Any]] = None,
         verbose: int = 0,
         seed: Optional[int] = None,
-        device: Union[th.device, str] = "cuda",
+        device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
     ):
         super().__init__(
@@ -194,11 +194,11 @@ class TD3(OffPolicyAlgorithm):
                                               state=replay_data.observations,
                                               critic=self.critic,
                                               )
-                bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
+                # bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
 
-                # This two can be merged into one function and reuse the batched samples
-                actor_loss = bc_losses["consistency_losses"] + (0.1 * log_prob).mean()
-                # actor_loss = bc_losses["consistency_losses"]
+                q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
+                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+                actor_loss = (0.3 * log_prob- min_qf_pi).mean()
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor

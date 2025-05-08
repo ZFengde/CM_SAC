@@ -176,6 +176,7 @@ class Consistency_Model:
             x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
             s_in = self.sigmas[0] * th.ones_like(x_T[:, 0])
             x0_target = self.denoise(model, x_T, s_in, state)[1]  # [B, action_dim]
+            
         log_prob = self.kde_log_prob_batch(samples, x0_target, sigma=sigma)
         
         return x0_target, log_prob  # log_prob: [B]
