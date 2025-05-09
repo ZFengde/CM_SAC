@@ -2,7 +2,6 @@ import diff_rl
 import os
 from datetime import datetime
 from stable_baselines3.common.env_util import make_vec_env
-import torch
 
 def main(env_id,
 		algo,

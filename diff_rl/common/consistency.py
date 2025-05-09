@@ -3,7 +3,7 @@ import torch as th
 import numpy as np
 import torch.nn.functional as F
 import math
-import numpy as np
+
 from diff_rl.common.helpers import append_dims, append_zero, mean_flat
 from stable_baselines3.common.preprocessing import get_action_dim
 
@@ -126,11 +126,10 @@ class Consistency_Model:
         distiller_target = target_denoise_fn(x_t2, t2, state) # predicted target based on t2=t_n
         distiller_target = distiller_target.detach()
         
-        # TODO, to make this part and the log_prob together
-        state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=100, dim=1)
+        state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=1, dim=1)
         multi_actions = self.batch_multi_sample(model=model, state=state_rpt)
         q_value = critic.q1_batch_forward(state_rpt, multi_actions)
-        multi_q_losses = -q_value.mean()
+        multi_q_losses = - q_value.mean()
 
         terms = {}
         terms["multi_q_losses"] = multi_q_losses
@@ -166,45 +165,25 @@ class Consistency_Model:
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
         return x_0
     
-    def sample_log_prob(self, model, state, x0_target=None, N=100, sigma=0.3):
-        # sample N actions under same state
+    def sample_log_prob(self, model, state, x0_target=None, N=1, sigma=0.1):
+        # Step 1: sample N actions under same state
         state_repeat = state.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
         samples = self.batch_multi_sample(model, state_repeat).detach()  # [B, N, action_dim]
 
-        # get target action x0 (either sample or user-provided)
+        # Step 2: get target action x0 (either sample or user-provided)
         if x0_target is None:
             x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
-            s_in = self.sigmas[0] * th.ones_like(x_T[:, 0])
-            x0_target = self.denoise(model, x_T, s_in, state)[1]  # [B, action_dim]
-            
-        log_prob = self.kde_log_prob_batch(samples, x0_target, sigma=sigma)
-        
+            s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
+            x0_target = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, action_dim]
+
+        x0_exp = x0_target.unsqueeze(1)  # [B, 1, action_dim]
+        sq_dist = ((x0_exp - samples) ** 2).sum(dim=2)  # [B, N]
+
+        log_kernel = -sq_dist / (2 * sigma ** 2)
+        log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)
+
         return x0_target, log_prob  # log_prob: [B]
     
-    def kde_log_prob_batch(self, samples, targets, sigma=0.3, epsilon=1e-8):
-        """
-        Batched KDE log-prob estimation using Gaussian kernel.
-
-        Args:
-            samples: Tensor of shape [B, N, D]
-            targets: Tensor of shape [B, D]
-            sigma: float - bandwidth (Gaussian kernel std)
-        
-        Returns:
-            log_probs: Tensor of shape [B]
-        """
-        B, N, D = samples.shape
-        targets_exp = targets.unsqueeze(1)  # [B, 1, D]
-        diff = samples - targets_exp # [B, N, D] - [B, 1, D] => [B, N, D]
-        sq_dist = (diff ** 2).sum(dim=-1)  # [B, N]
-        # Gaussian kernel exponent
-        log_kernel = -sq_dist / (2 * sigma ** 2)  # [B, N]
-        # Log of sum over N samples
-        log_sum = th.logsumexp(log_kernel, dim=1) - math.log(N)  # [B]
-        # Normalization constant: -D * log(sqrt(2πσ²)) = -D * log(σ√(2π))
-        norm_const = D * math.log(sigma * math.sqrt(2 * math.pi))  # scalar
-        log_probs = log_sum - norm_const  # [B]
-        
-        return log_probs  # shape: [B]
+    
 
         
