@@ -2,6 +2,7 @@ import diff_rl
 import os
 from datetime import datetime
 from stable_baselines3.common.env_util import make_vec_env
+import bopu_env
 
 def main(env_id,
 		algo,
@@ -45,7 +46,7 @@ def main(env_id,
 if __name__ == '__main__':
     import argparse	
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env_id', type=str, default='Humanoid-v3') 
+    parser.add_argument('--env_id', type=str, default='bopu-v1') 
     parser.add_argument('--algo', type=str, default='TD3') 
     parser.add_argument('--specified_log_name', type=str, default=None) 
     parser.add_argument('--n_envs', type=int, default=1)
