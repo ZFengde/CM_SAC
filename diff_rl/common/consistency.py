@@ -149,6 +149,19 @@ class Consistency_Model:
         # since the maximum of c_out is 0.5, output from model is 1
         # then denoised in [-0.5, 0.5]
         return model_output, denoised
+    
+    def batch_denoise(self, model, x_t, sigmas, state): # get clean output from x_t
+        c_skip, c_out, c_in = [
+            append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(sigmas)
+        ]
+        rescaled_t = 1000 * 0.25 * th.log(sigmas + 1e-44)
+        model_output = model(c_in * x_t, rescaled_t, state)
+
+        denoised = c_out * model_output + c_skip * x_t 
+        denoised = denoised.clamp(-1, 1)
+        # since the maximum of c_out is 0.5, output from model is 1
+        # then denoised in [-0.5, 0.5]
+        return model_output, denoised
 
     def sample(self, model, state): # get clean output from x_T
         x_0 = self.sample_onestep(model, state)
@@ -165,25 +178,34 @@ class Consistency_Model:
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
         return x_0
     
-    def sample_log_prob(self, model, state, x0_target=None, N=1, sigma=0.1):
-        # Step 1: sample N actions under same state
+    def sample_log_prob(self, model, state, N=10, sigma=0.1):
+        num_scales = 40
+        # Step 1: get target action x_0 (either sample or user-provided)
+        x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
+        s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
+        x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, action_dim]
+
+        # Step 2: sample N actions under same state
         state_repeat = state.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
-        samples = self.batch_multi_sample(model, state_repeat).detach()  # [B, N, action_dim]
+        x_0_repeat = x_0.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
+        noise = th.randn_like(x_0_repeat) # make this noise a \nabla[Q(s, a)]
+        dims = x_0_repeat.ndim
+        indices = th.randint(
+            0, num_scales - 1, (state_repeat.shape[0], state_repeat.shape[1],), device=x_0.device
+        ) # random 
+        t = self.sigma_max ** (1 / self.rho) + indices / (num_scales - 1) * (
+            self.sigma_min ** (1 / self.rho) - self.sigma_max ** (1 / self.rho)
+        ) # t (t_n+1) and t2(t_n) here is randomly generated based on indices
+        t = t**self.rho # t_n+1 
+        x_t_batch = x_0_repeat + noise * append_dims(t, dims) # basically is x_start + noise
 
-        # Step 2: get target action x0 (either sample or user-provided)
-        if x0_target is None:
-            x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
-            s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
-            x0_target = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, action_dim]
+        s_in = x_T.new_ones([x_t_batch.shape[0], x_t_batch.shape[1]]) # stands for sigma input
+        samples = self.batch_denoise(model, x_t_batch, t, state_repeat)[1]
 
-        x0_exp = x0_target.unsqueeze(1)  # [B, 1, action_dim]
-        sq_dist = ((x0_exp - samples) ** 2).sum(dim=2)  # [B, N]
+        x_0_exp = x_0.unsqueeze(1)  # [B, 1, action_dim]
+        sq_dist = ((x_0_exp - samples) ** 2).sum(dim=2)  # [B, N]
 
         log_kernel = -sq_dist / (2 * sigma ** 2)
         log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)
 
-        return x0_target, log_prob  # log_prob: [B]
-    
-    
-
-        
+        return x_0, log_prob  # log_prob: [B]

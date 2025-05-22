@@ -134,7 +134,7 @@ class TD3(OffPolicyAlgorithm):
 
             # TODO, modify here
             # # Action by the current actor for the sampled state
-            # actions_pi, log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.observations)
+            actions_pi, log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.observations)
             # log_prob = log_prob.reshape(-1, 1)
 
             # ent_coef_loss = None
@@ -159,14 +159,14 @@ class TD3(OffPolicyAlgorithm):
             #     self.ent_coef_optimizer.step()
 
             with th.no_grad():
-                # next_actions, next_log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.next_observations)
+                next_actions, next_log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.next_observations)
                 next_actions = self.consistency_model.sample(model=self.actor, state=replay_data.next_observations)
             
                 # Compute the next Q-values: min over all critics targets
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
-                # next_q_values = next_q_values - 0.3 * next_log_prob.reshape(-1, 1)
+                next_q_values = next_q_values - 0.3 * next_log_prob.reshape(-1, 1)
 
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
@@ -186,21 +186,21 @@ class TD3(OffPolicyAlgorithm):
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
 
-                compute_bc_losses = functools.partial(self.consistency_model.consistency_losses,
-                                              model=self.actor,
-                                              x_start=replay_data.actions,
-                                              num_scales=40,
-                                              target_model=self.actor_target,
-                                              state=replay_data.observations,
-                                              critic=self.critic,
-                                              )
-                bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
+                # compute_bc_losses = functools.partial(self.consistency_model.consistency_losses,
+                #                               model=self.actor,
+                #                               x_start=replay_data.actions,
+                #                               num_scales=40,
+                #                               target_model=self.actor_target,
+                #                               state=replay_data.observations,
+                #                               critic=self.critic,
+                #                               )
+                # bc_losses = compute_bc_losses() # but here take loss rather than consistency_loss
 
-                # q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
-                # min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-                # actor_loss = (0.3 * log_prob- min_qf_pi).mean()
-                # actor_loss = (- min_qf_pi).mean()
-                actor_loss = bc_losses["consistency_losses"] 
+                q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
+                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+                actor_loss = (0.3 * log_prob- min_qf_pi).mean()
+                actor_loss = (- min_qf_pi).mean()
+                # actor_loss = bc_losses["consistency_losses"] 
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor
