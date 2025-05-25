@@ -1,0 +1,68 @@
+conda create --name diff_rl python==3.10.13
+
+# Start from here
+conda install pytorch==2.2.0 torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+pip install stable-baselines3==2.2.1
+conda install -c conda-forge libstdcxx-ng (for libGL)
+pip install swig (for gym box2d)
+pip install mujoco==2.3.7
+pip install gymnasium==0.29.1
+pip install numpy==1.26.3
+
+gedit .bashrc	
+    add:
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
+
+pip install psutil
+pip install tensorboard>=2.9.1
+cd envs --> pip install -e .
+
+
+--------------------------------------------------------------
+
+OffPolicyAlgorithm:
+	unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
+
+--> BaseAlgorithm:
+	return self.policy.predict(observation, state, episode_start, deterministic)
+	
+--> TD3Policy:
+    def _predict(self, observation, deterministic: bool = False):
+        action = self.actor(observation)
+        return action
+
+--> BasePolicy:
+    def predict(
+        self,
+        observation: Union[np.ndarray, Dict[str, np.ndarray]],
+        state: Optional[Tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+    ):
+
+        # Switch to eval mode (this affects batch norm / dropout)
+        self.set_training_mode(False)
+
+        obs_tensor, vectorized_env = self.obs_to_tensor(observation)
+
+        with th.no_grad(): 
+            actions = self._predict(obs_tensor, deterministic=deterministic) ########## This is where get actor output
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+
+        if isinstance(self.action_space, spaces.Box):
+            if self.squash_output:
+                # Rescale to proper domain when using squashing
+                actions = self.unscale_action(actions)  # type: ignore[assignment, arg-type]
+            else: # Rescale the action from [-1, 1] to [low, high]
+                # Actions could be on arbitrary scale, so clip the actions to avoid
+                # out of bound error (e.g. if sampling from a Gaussian distribution)
+                actions = np.clip(actions, self.action_space.low, self.action_space.high)  # type: ignore[assignment, arg-type]
+
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            assert isinstance(actions, np.ndarray)
+            actions = actions.squeeze(axis=0)
+
+        return actions, state 
+	
