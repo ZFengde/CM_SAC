@@ -21,6 +21,7 @@ from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 
 from algos.common.buffers import DictReplayBuffer, ReplayBuffer
 from algos.common.policies import BasePolicy
+from algos.common.consistency import Consistency_Model
 
 SelfOffPolicyAlgorithm = TypeVar("SelfOffPolicyAlgorithm", bound="OffPolicyAlgorithm")
 
@@ -155,6 +156,10 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             **self.policy_kwargs,
         )
         self.policy = self.policy.to(self.device)
+        self.consistency_model = Consistency_Model(env=self.env, 
+                                            sigma_max=80.0,
+                                            device=self.device,
+                                            sampler="onestep",)
 
         # Convert train freq parameter to TrainFreq object
         self._convert_train_freq()
@@ -319,16 +324,19 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup):
             # Warmup phase
             unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
+            scaled_action = self.policy.scale_action(unscaled_action)
         else:
             # Note: when using continuous actions,
             # we assume that the policy uses tanh to scale the action
             # We use non-deterministic action in the case of SAC, for TD3, it does not matter
             assert self._last_obs is not None, "self._last_obs was not set"
-            unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
+            # unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
+            state = th.FloatTensor(self._last_obs.reshape(1, -1)).to(self.device)
+            scaled_action = self.consistency_model.sample(model=self.actor, state=state).cpu().data.numpy()
 
         # Rescale the action from [low, high] to [-1, 1]
         if isinstance(self.action_space, spaces.Box):
-            scaled_action = self.policy.scale_action(unscaled_action)
+            # scaled_action = self.policy.scale_action(unscaled_action)
 
             # Add noise to the action (improve exploration)
             if action_noise is not None:

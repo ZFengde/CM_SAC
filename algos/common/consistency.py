@@ -135,6 +135,15 @@ class Consistency_Model:
         terms["multi_q_losses"] = multi_q_losses
         terms["consistency_losses"] = multi_q_losses
 
+        # distance = th.norm(distiller - x_start, dim=1, keepdim=True) recover distance
+        # distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
+        # distance_ratio = distance/distance_target
+
+        # advantages = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
+        # ppo_loss_1 = advantages * distance_ratio 
+        # ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
+        # ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean()
+
         return terms
 
     def denoise(self, model, x_t, sigmas, state): # get clean output from x_t
@@ -200,12 +209,66 @@ class Consistency_Model:
         x_t_batch = x_0_repeat + noise * append_dims(t, dims) # basically is x_start + noise
 
         s_in = x_T.new_ones([x_t_batch.shape[0], x_t_batch.shape[1]]) # stands for sigma input
-        samples = self.batch_denoise(model, x_t_batch, t, state_repeat)[1]
+        x_t_batch_samples = self.batch_denoise(model, x_t_batch, t, state_repeat)[1]
 
         x_0_exp = x_0.unsqueeze(1).detach()  # [B, 1, action_dim]
-        sq_dist = ((x_0_exp - samples) ** 2).sum(dim=2)  # [B, N]
+        sq_dist = ((x_0_exp - x_t_batch_samples) ** 2).sum(dim=2)  # [B, N]
 
         log_kernel = -sq_dist / (2 * sigma ** 2)
         log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)
 
-        return x_0, log_prob  # log_prob: [B]
+        return x_0, log_prob, x_t_batch_samples  # log_prob: [B]
+    
+    def contrastive_loss(
+        self,
+        model,
+        x_start, # batch * action_dim
+        num_scales,
+        state=None, # # batch * obs_dim
+        target_model=None,
+        noise=None,
+    ):
+        noise = th.randn_like(x_start) # make this noise a \nabla[Q(s, a)]
+        noise_compare = th.randn_like(x_start) # make this noise a \nabla[Q(s, a)]
+        dims = x_start.ndim
+
+        def denoise_fn(x, t, state=None):
+            return self.denoise(model, x, t, state)[1]
+
+        @th.no_grad()
+        def target_denoise_fn(x, t, state=None):
+            return self.denoise(target_model, x, t, state)[1]
+
+        indices = th.randint(
+            0, num_scales - 1, (x_start.shape[0],), device=x_start.device
+        ) # random 
+
+        t = self.sigma_max ** (1 / self.rho) + indices / (num_scales - 1) * (
+            self.sigma_min ** (1 / self.rho) - self.sigma_max ** (1 / self.rho)
+        ) # t (t_n+1) and t2(t_n) here is randomly generated based on indices
+        t = t**self.rho # t_n+1 
+        
+        x_t = x_start + noise * append_dims(t, dims) # basically is x_start + noise
+        x_t_compare = x_start + noise_compare * append_dims(t, dims).detach() # basically is x_start + noise
+
+        dropout_state = th.get_rng_state() # random number generator
+        distiller = denoise_fn(x_t, t, state) # # predicted target based on t = t_n+1
+
+        th.set_rng_state(dropout_state)
+        distiller_diff = target_denoise_fn(x_t_compare, t, state) # predicted target based on t2=t_n
+        distiller_diff = distiller_diff.detach()
+
+        snrs = self.get_snr(t) # sigmas**-2
+        weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
+        # t 越小， weights越大
+
+        output_distance = (distiller - distiller_diff) ** 2 # 对比损失，噪声差异越大，输出的差异也应该越大
+        # [-1, 1], 1: same, -1: reverse, 0: vertical, should think about the coefficient here
+        # TODO, we should consider the timestep, noise_similarity as well as the norm here
+        # contrastive_loss = mean_flat(output_distance) * weights * noise_similarity # weighted average as loss
+        contrastive_loss = - mean_flat(output_distance) * weights # weighted average as loss
+
+        terms = {}
+        terms["contrastive_loss"] = contrastive_loss
+
+        return terms

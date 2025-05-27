@@ -621,3 +621,13 @@ class ContinuousCritic(BaseModel):
         with th.no_grad():
             features = self.extract_features(obs, self.features_extractor)
         return self.q_networks[0](th.cat([features, actions], dim=1))
+
+    def q1_batch_forward(self, obs, actions):
+        """
+        Only predict the Q-value using the first network.
+        This allows to reduce computation when all the estimates are not needed
+        (e.g. when updating the policy in TD3).
+        """
+        with th.no_grad():
+            features = obs.float()
+        return self.q_networks[0](th.cat([features, actions], dim=-1))

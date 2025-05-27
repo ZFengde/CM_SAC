@@ -71,6 +71,9 @@ SACPolicy(
   )
 )
 
+In the original SAC, there is a tanh in the sample, to make it output between [-1, 1]
+----------------------------------------------------------------------
+
 TD3Policy(
   (actor): Actor(
     (features_extractor): FlattenExtractor(
@@ -135,5 +138,30 @@ TD3Policy(
       (3): ReLU()
       (4): Linear(in_features=300, out_features=1, bias=True)
     )
+  )
+)
+
+CM_SAC(
+  (actor): Actor(
+    (features_extractor): FlattenExtractor(
+      (flatten): Flatten(start_dim=1, end_dim=-1)
+    )
+    (mu): MLP(
+      (time_mlp): Sequential(
+        (0): SinusoidalPosEmb()
+        (1): Linear(in_features=16, out_features=32, bias=True)
+        (2): Mish()
+        (3): Linear(in_features=32, out_features=16, bias=True)
+      )
+      (layers): Sequential(
+        (0): Linear(in_features=409, out_features=256, bias=True)
+        (1): Mish()
+        (2): Linear(in_features=256, out_features=256, bias=True)
+        (3): Mish()
+        (4): Linear(in_features=256, out_features=17, bias=True)
+        (5): Tanh()
+      )
+    )
+    (log_std): Linear(in_features=256, out_features=17, bias=True)
   )
 )

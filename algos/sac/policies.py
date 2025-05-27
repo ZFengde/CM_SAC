@@ -17,6 +17,7 @@ from stable_baselines3.common.torch_layers import (
 
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from algos.common.policies import BasePolicy, ContinuousCritic
+from algos.common.helpers import SinusoidalPosEmb
 
 # CAP the standard deviation of the actor
 LOG_STD_MAX = 2
@@ -62,28 +63,11 @@ class Actor(BasePolicy):
         self.clip_mean = clip_mean
 
         action_dim = get_action_dim(self.action_space)
-        latent_pi_net = create_mlp(features_dim, -1, net_arch, activation_fn)
-        self.latent_pi = nn.Sequential(*latent_pi_net)
         last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
-        if self.use_sde:
-            self.action_dist = StateDependentNoiseDistribution(
-                action_dim, full_std=full_std, use_expln=use_expln, learn_features=True, squash_output=True
-            )
-            self.mu, self.log_std = self.action_dist.proba_distribution_net(
-                latent_dim=last_layer_dim, latent_sde_dim=last_layer_dim, log_std_init=log_std_init
-            )
-            # Avoid numerical issues by limiting the mean of the Gaussian
-            # to be in [-clip_mean, clip_mean]
-            if clip_mean > 0.0:
-                self.mu = nn.Sequential(self.mu, nn.Hardtanh(min_val=-clip_mean, max_val=clip_mean))
-        else:
-            self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
-            self.mu = nn.Sequential(
-                        nn.Linear(last_layer_dim, action_dim),
-                        nn.Tanh()
-                    )
-            self.log_std = nn.Linear(last_layer_dim, action_dim)  # type: ignore[assignment]
+        self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
+        self.mu =  MLP(state_dim=self.features_dim, action_dim=action_dim)
+        self.log_std = nn.Linear(last_layer_dim, action_dim)  # type: ignore[assignment]
 
     def _get_constructor_parameters(self) -> Dict[str, Any]:
         data = super()._get_constructor_parameters()
@@ -104,54 +88,27 @@ class Actor(BasePolicy):
         return data
 
     def get_std(self) -> th.Tensor:
-        """
-        Retrieve the standard deviation of the action distribution.
-        Only useful when using gSDE.
-        It corresponds to ``th.exp(log_std)`` in the normal case,
-        but is slightly different when using ``expln`` function
-        (cf StateDependentNoiseDistribution doc).
-
-        :return:
-        """
         msg = "get_std() is only available when using gSDE"
         assert isinstance(self.action_dist, StateDependentNoiseDistribution), msg
         return self.action_dist.get_std(self.log_std)
 
     def reset_noise(self, batch_size: int = 1) -> None:
-        """
-        Sample new weights for the exploration matrix, when using gSDE.
-
-        :param batch_size:
-        """
         msg = "reset_noise() is only available when using gSDE"
         assert isinstance(self.action_dist, StateDependentNoiseDistribution), msg
         self.action_dist.sample_weights(self.log_std, batch_size=batch_size)
 
-    def get_action_dist_params(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor, Dict[str, th.Tensor]]:
-        features = self.extract_features(obs, self.features_extractor)
-        latent_pi = self.latent_pi(features)
-        mean_actions = self.mu(latent_pi)
-
-        if self.use_sde:
-            return mean_actions, self.log_std, dict(latent_sde=latent_pi)
-        # Unstructured exploration (Original implementation)
-        log_std = self.log_std(latent_pi)  # type: ignore[operator]
-        # Original Implementation to cap the standard deviation
-        log_std = th.clamp(log_std, LOG_STD_MIN, LOG_STD_MAX)
-        return mean_actions, log_std, {}
-
-    def forward(self, obs: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+    def forward(self, x, time, obs):
+        if obs.dim()==3:
+            features = obs.float()
+        else:
+            features = self.extract_features(obs, self.features_extractor) # flatten
+        return self.mu(x, time, features)
         # mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
         # # Note: the action is squashed
         # return self.action_dist.actions_from_params(mean_actions, log_std, deterministic=deterministic, **kwargs)
-        features = self.extract_features(obs, self.features_extractor)
-        latent_pi = self.latent_pi(features)
-        return self.mu(latent_pi)
-
-    def action_log_prob(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor]:
-        mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
-        # return action and associated log prob
-        return self.action_dist.log_prob_from_params(mean_actions, log_std, **kwargs)
+        # # features = self.extract_features(obs, self.features_extractor)
+        # # latent_pi = self.latent_pi(features)
+        # # return self.mu(latent_pi)
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         return self(observation, deterministic)
@@ -321,3 +278,40 @@ class SACPolicy(BasePolicy):
 
 
 MlpPolicy = SACPolicy
+
+class MLP(nn.Module):
+    def __init__(self,
+                 state_dim,
+                 action_dim,
+                 t_dim=16):
+
+        super(MLP, self).__init__()
+
+        self.time_mlp = nn.Sequential(
+            SinusoidalPosEmb(t_dim),
+            nn.Linear(t_dim, t_dim * 2),
+            nn.Mish(),
+            nn.Linear(t_dim * 2, t_dim),
+        )
+
+        input_dim = state_dim + action_dim + t_dim
+        self.layers = nn.Sequential(nn.Linear(input_dim, 256),
+                                       nn.Mish(),
+                                       nn.Linear(256, 256),
+                                       nn.Mish(),
+                                       nn.Linear(256, action_dim),
+                                       nn.Tanh()) 
+
+    def forward(self, x, time, state):
+
+        t = self.time_mlp(time)
+        # if state.dim() == 3: # TODO, be careful here, cuz it can only repeat 50 times
+        #     t = th.repeat_interleave(t.unsqueeze(1), repeats=1, dim=1)
+        if state is not None:
+            x = th.cat([x, t, state], dim=-1)
+        else:
+            x = th.cat([x, t], dim=1)
+        
+        x = self.layers(x)
+        return x
+    
