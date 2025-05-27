@@ -195,7 +195,7 @@ class SAC(OffPolicyAlgorithm):
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 # add entropy term
                 # next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
-                next_q_values = next_q_values -  next_log_prob.reshape(-1, 1)
+                # next_q_values = next_q_values -  next_log_prob.reshape(-1, 1)
                 # td error + entropy term
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
@@ -236,7 +236,8 @@ class SAC(OffPolicyAlgorithm):
             q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
             min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
             # actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
-            actor_loss = (contrasitive_loss["contrastive_loss"] - min_qf_pi).mean()
+            # actor_loss = (contrasitive_loss["contrastive_loss"] - min_qf_pi).mean()
+            actor_loss = ( - min_qf_pi).mean()
             actor_losses.append(actor_loss.item())
             contrasitive_losses.append(contrasitive_loss["contrastive_loss"].mean().item())
 

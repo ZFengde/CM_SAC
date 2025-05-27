@@ -2,7 +2,6 @@ import algos
 import os
 from datetime import datetime
 from stable_baselines3.common.env_util import make_vec_env
-import bopu_env
 
 def main(env_id,
 		algo,
