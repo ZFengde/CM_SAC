@@ -1,37 +1,19 @@
 SACPolicy(
-  (actor): Actor(
-    (features_extractor): FlattenExtractor(
-      (flatten): Flatten(start_dim=1, end_dim=-1)
-    )
-    (latent_pi): Sequential(
-      (0): Linear(in_features=376, out_features=256, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=256, out_features=256, bias=True)
-      (3): ReLU()
-    )
-    (mu): Sequential(
-      (0): Linear(in_features=256, out_features=17, bias=True)
-      (1): Tanh()
-    )
-    (log_std): Linear(in_features=256, out_features=17, bias=True)
+Actor(
+  (features_extractor): FlattenExtractor(
+    (flatten): Flatten(start_dim=1, end_dim=-1)
   )
-  (actor_target): Actor(
-    (features_extractor): FlattenExtractor(
-      (flatten): Flatten(start_dim=1, end_dim=-1)
-    )
-    (latent_pi): Sequential(
-      (0): Linear(in_features=376, out_features=256, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=256, out_features=256, bias=True)
-      (3): ReLU()
-    )
-    (mu): Sequential(
-      (0): Linear(in_features=256, out_features=17, bias=True)
-      (1): Tanh()
-    )
-    (log_std): Linear(in_features=256, out_features=17, bias=True)
+  (latent_pi): Sequential(
+    (0): Linear(in_features=393, out_features=256, bias=True)
+    (1): ReLU()
+    (2): Linear(in_features=256, out_features=256, bias=True)
+    (3): ReLU()
   )
-  (critic): ContinuousCritic(
+  (mu): Linear(in_features=256, out_features=1, bias=True)
+  (log_std): Linear(in_features=256, out_features=1, bias=True)
+)
+  
+(critic): ContinuousCritic(
     (features_extractor): FlattenExtractor(
       (flatten): Flatten(start_dim=1, end_dim=-1)
     )
@@ -50,7 +32,7 @@ SACPolicy(
       (4): Linear(in_features=256, out_features=1, bias=True)
     )
   )
-  (critic_target): ContinuousCritic(
+(critic_target): ContinuousCritic(
     (features_extractor): FlattenExtractor(
       (flatten): Flatten(start_dim=1, end_dim=-1)
     )
@@ -159,7 +141,6 @@ CM_SAC(
         (2): Linear(in_features=256, out_features=256, bias=True)
         (3): Mish()
         (4): Linear(in_features=256, out_features=17, bias=True)
-        (5): Tanh()
       )
     )
     (log_std): Linear(in_features=256, out_features=17, bias=True)

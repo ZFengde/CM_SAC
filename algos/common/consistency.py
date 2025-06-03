@@ -154,7 +154,7 @@ class Consistency_Model:
         model_output = model(c_in * x_t, rescaled_t, state)
 
         denoised = c_out * model_output + c_skip * x_t 
-        denoised = denoised.clamp(-1, 1)
+        denoised = th.tanh(denoised) # maybe change into tanh?
         # since the maximum of c_out is 0.5, output from model is 1
         # then denoised in [-0.5, 0.5]
         return model_output, denoised

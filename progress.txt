@@ -1,3 +1,8 @@
-Currently,
+Currently, 
 
-Is a modified version of TD3 from SAC
+Is a modified version of TD3 from SAC, working, but not the best
+
+the grad from log_prob to mu is only exist when use 
+Squashed Gaussian Log-Probability with Tanh Correction like what they did in SB3 SAC
+
+需要注意的一个点 std/探索需要加在tanh之前

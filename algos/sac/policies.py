@@ -299,8 +299,7 @@ class MLP(nn.Module):
                                        nn.Mish(),
                                        nn.Linear(256, 256),
                                        nn.Mish(),
-                                       nn.Linear(256, action_dim),
-                                       nn.Tanh()) 
+                                       nn.Linear(256, action_dim)) 
 
     def forward(self, x, time, state):
 
