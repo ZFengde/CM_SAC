@@ -141,6 +141,7 @@ CM_SAC(
         (2): Linear(in_features=256, out_features=256, bias=True)
         (3): Mish()
         (4): Linear(in_features=256, out_features=17, bias=True)
+        (5): Tanh()
       )
     )
     (log_std): Linear(in_features=256, out_features=17, bias=True)
