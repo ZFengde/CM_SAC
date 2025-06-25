@@ -20,8 +20,8 @@ from algos.common.policies import BasePolicy, ContinuousCritic
 from algos.common.helpers import SinusoidalPosEmb
 
 # CAP the standard deviation of the actor
-LOG_STD_MAX = 2
-LOG_STD_MIN = -20
+log_epsilon_MAX = 2
+log_epsilon_MIN = -20
 
 
 class Actor(BasePolicy):
@@ -37,7 +37,7 @@ class Actor(BasePolicy):
         features_dim: int,
         activation_fn: Type[nn.Module] = nn.ReLU,
         use_sde: bool = False,
-        log_std_init: float = -3,
+        log_epsilon_init: float = -3,
         full_std: bool = True,
         use_expln: bool = False,
         clip_mean: float = 2.0,
@@ -57,7 +57,7 @@ class Actor(BasePolicy):
         self.net_arch = net_arch
         self.features_dim = features_dim
         self.activation_fn = activation_fn
-        self.log_std_init = log_std_init
+        self.log_epsilon_init = log_epsilon_init
         self.use_expln = use_expln
         self.full_std = full_std
         self.clip_mean = clip_mean
@@ -67,7 +67,7 @@ class Actor(BasePolicy):
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
         self.mu =  MLP(state_dim=self.features_dim, action_dim=action_dim)
-        self.log_std = nn.Linear(last_layer_dim, action_dim)  # type: ignore[assignment]
+        self.log_epsilon = nn.Linear(self.features_dim, action_dim)  # type: ignore[assignment]
 
     def _get_constructor_parameters(self) -> Dict[str, Any]:
         data = super()._get_constructor_parameters()
@@ -78,7 +78,7 @@ class Actor(BasePolicy):
                 features_dim=self.features_dim,
                 activation_fn=self.activation_fn,
                 use_sde=self.use_sde,
-                log_std_init=self.log_std_init,
+                log_epsilon_init=self.log_epsilon_init,
                 full_std=self.full_std,
                 use_expln=self.use_expln,
                 features_extractor=self.features_extractor,
@@ -90,12 +90,12 @@ class Actor(BasePolicy):
     def get_std(self) -> th.Tensor:
         msg = "get_std() is only available when using gSDE"
         assert isinstance(self.action_dist, StateDependentNoiseDistribution), msg
-        return self.action_dist.get_std(self.log_std)
+        return self.action_dist.get_std(self.log_epsilon)
 
     def reset_noise(self, batch_size: int = 1) -> None:
         msg = "reset_noise() is only available when using gSDE"
         assert isinstance(self.action_dist, StateDependentNoiseDistribution), msg
-        self.action_dist.sample_weights(self.log_std, batch_size=batch_size)
+        self.action_dist.sample_weights(self.log_epsilon, batch_size=batch_size)
 
     def forward(self, x, time, obs):
         if obs.dim()==3:
@@ -103,9 +103,9 @@ class Actor(BasePolicy):
         else:
             features = self.extract_features(obs, self.features_extractor) # flatten
         return self.mu(x, time, features)
-        # mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
+        # mean_actions, log_epsilon, kwargs = self.get_action_dist_params(obs)
         # # Note: the action is squashed
-        # return self.action_dist.actions_from_params(mean_actions, log_std, deterministic=deterministic, **kwargs)
+        # return self.action_dist.actions_from_params(mean_actions, log_epsilon, deterministic=deterministic, **kwargs)
         # # features = self.extract_features(obs, self.features_extractor)
         # # latent_pi = self.latent_pi(features)
         # # return self.mu(latent_pi)
@@ -129,7 +129,7 @@ class SACPolicy(BasePolicy):
         net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
         activation_fn: Type[nn.Module] = nn.ReLU,
         use_sde: bool = False,
-        log_std_init: float = -3,
+        log_epsilon_init: float = -3,
         use_expln: bool = False,
         clip_mean: float = 2.0,
         features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
@@ -169,7 +169,7 @@ class SACPolicy(BasePolicy):
 
         sde_kwargs = {
             "use_sde": use_sde,
-            "log_std_init": log_std_init,
+            "log_epsilon_init": log_epsilon_init,
             "use_expln": use_expln,
             "clip_mean": clip_mean,
         }
@@ -229,7 +229,7 @@ class SACPolicy(BasePolicy):
                 net_arch=self.net_arch,
                 activation_fn=self.net_args["activation_fn"],
                 use_sde=self.actor_kwargs["use_sde"],
-                log_std_init=self.actor_kwargs["log_std_init"],
+                log_epsilon_init=self.actor_kwargs["log_epsilon_init"],
                 use_expln=self.actor_kwargs["use_expln"],
                 clip_mean=self.actor_kwargs["clip_mean"],
                 n_critics=self.critic_kwargs["n_critics"],

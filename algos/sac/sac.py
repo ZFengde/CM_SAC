@@ -163,25 +163,25 @@ class SAC(OffPolicyAlgorithm):
             log_prob = log_prob.reshape(-1, 1)
             log_probs.append(log_prob.mean().item())
 
-            # ent_coef_loss = None
-            # if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
-            #     # Important: detach the variable from the graph
-            #     # so we don't change it with other losses
-            #     # see https://github.com/rail-berkeley/softlearning/issues/60
-            #     ent_coef = th.exp(self.log_ent_coef.detach())
-            #     ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
-            #     ent_coef_losses.append(ent_coef_loss.item())
-            # else:
-            #     ent_coef = self.ent_coef_tensor
+            ent_coef_loss = None
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                # Important: detach the variable from the graph
+                # so we don't change it with other losses
+                # see https://github.com/rail-berkeley/softlearning/issues/60
+                ent_coef = th.exp(self.log_ent_coef.detach())
+                ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
+                ent_coef_losses.append(ent_coef_loss.item())
+            else:
+                ent_coef = self.ent_coef_tensor
 
-            # ent_coefs.append(ent_coef.item())
+            ent_coefs.append(ent_coef.item())
 
-            # # Optimize entropy coefficient, also called
-            # # entropy temperature or alpha in the paper
-            # if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
-            #     self.ent_coef_optimizer.zero_grad()
-            #     ent_coef_loss.backward()
-            #     self.ent_coef_optimizer.step()
+            # Optimize entropy coefficient, also called
+            # entropy temperature or alpha in the paper
+            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
+                self.ent_coef_optimizer.zero_grad()
+                ent_coef_loss.backward()
+                self.ent_coef_optimizer.step()
 
             with th.no_grad():
                 # Select action according to policy
@@ -236,8 +236,8 @@ class SAC(OffPolicyAlgorithm):
             q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
             min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
             # actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
+            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
             # actor_loss = (contrasitive_loss["contrastive_loss"] - min_qf_pi).mean()
-            actor_loss = ( - min_qf_pi).mean()
             actor_losses.append(actor_loss.item())
             contrasitive_losses.append(contrasitive_loss["contrastive_loss"].mean().item())
 

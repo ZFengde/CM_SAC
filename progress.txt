@@ -6,3 +6,8 @@ the grad from log_prob to mu is only exist when use
 Squashed Gaussian Log-Probability with Tanh Correction like what they did in SB3 SAC
 
 需要注意的一个点 std/探索需要加在tanh之前
+isotropic uniform noise as std
+
+看一下如何将这个功能按照SB3中SAC的std方式使用并训练
+
+TODO, 对于每个不同的state以及x_T输出不同的权重，后者有必要吗

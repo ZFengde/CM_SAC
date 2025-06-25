@@ -154,7 +154,10 @@ class Consistency_Model:
         model_output = model(c_in * x_t, rescaled_t, state)
 
         denoised = c_out * model_output + c_skip * x_t 
-        denoised = th.tanh(denoised) # TODO, think about where to put this part
+        # TODO, add a uniform distribution layer
+        log_epsilon = model.log_epsilon(state.float())
+        noise = self.generate_directional_noise(log_epsilon, state, denoised.shape)
+        denoised = th.tanh(denoised + noise) # TODO, think about where to put this part
         return model_output, denoised
     
     def batch_denoise(self, model, x_t, sigmas, state): # get clean output from x_t
@@ -165,7 +168,9 @@ class Consistency_Model:
         model_output = model(c_in * x_t, rescaled_t, state)
 
         denoised = c_out * model_output + c_skip * x_t 
-        denoised = th.tanh(denoised)
+        log_epsilon = model.log_epsilon(state.float())
+        noise = self.generate_directional_noise(log_epsilon, state, denoised.shape)
+        denoised = th.tanh(denoised + noise)
         return model_output, denoised
 
     def sample(self, model, state): # get clean output from x_T
@@ -205,12 +210,13 @@ class Consistency_Model:
         x_t_batch = x_0_repeat + noise * append_dims(t, dims) # basically is x_start + noise
 
         s_in = x_T.new_ones([x_t_batch.shape[0], x_t_batch.shape[1]]) # stands for sigma input
-        x_t_batch_samples = self.batch_denoise(model, x_t_batch, t, state_repeat)[1]
+        x_t_batch_samples = self.denoise(model, x_t_batch, t, state_repeat)[1]
 
         x_0_exp = x_0.unsqueeze(1).detach()  # [B, 1, action_dim]
         sq_dist = ((x_0_exp - x_t_batch_samples) ** 2).sum(dim=2)  # [B, N]
 
-        log_kernel = -sq_dist / (2 * sigma ** 2)
+        D = x_0.shape[1]
+        log_kernel = -sq_dist / (2 * sigma ** 2) - D * math.log(sigma * math.sqrt(2 * math.pi))
         log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)
 
         return x_0, log_prob, x_t_batch_samples  # log_prob: [B]
@@ -268,3 +274,18 @@ class Consistency_Model:
         terms["contrastive_loss"] = contrastive_loss
 
         return terms
+    
+    def generate_directional_noise(self, log_epsilon, state, shape):
+        """
+        使用模型中的 log_std 对输出加入 direction-based 噪声
+        Args:
+            model: 模型，要求有 log_epsilon(state) 输出 [B, D] 的 log_std
+            state: 输入状态 [B, obs_dim]
+            shape: denoised 的 shape，用于匹配维度 [B, D]
+        Returns:
+            noise: 噪声 tensor，shape 同 denoised
+        """
+        sigma = th.exp(log_epsilon)                        # [B, D]
+        direction = th.randn(shape, device=state.device)
+        direction = direction / (direction.norm(dim=1, keepdim=True) + 1e-8)
+        return sigma * direction  # element-wise scale
