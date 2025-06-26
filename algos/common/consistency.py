@@ -188,38 +188,29 @@ class Consistency_Model:
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
         return x_0
     
-    def sample_log_prob(self, model, state, N=10, sigma=0.1):
-        num_scales = 40
-        # Step 1: get target action x_0 (either sample or user-provided)
-        x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
-        s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
-        x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, action_dim]
+    def sample_log_prob(self, model, state, N=100, sigma=0.1):
+        B, D = state.shape[0], self.action_dim
 
-        # Step 2: sample N actions under same state
-        state_repeat = state.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
-        x_0_repeat = x_0.unsqueeze(1).repeat(1, N, 1)  # [B, N, obs_dim]
-        noise = th.randn_like(x_0_repeat) # make this noise a \nabla[Q(s, a)]
-        dims = x_0_repeat.ndim
-        indices = th.randint(
-            0, num_scales - 1, (state_repeat.shape[0], state_repeat.shape[1],), device=x_0.device
-        ) # random 
-        t = self.sigma_max ** (1 / self.rho) + indices / (num_scales - 1) * (
-            self.sigma_min ** (1 / self.rho) - self.sigma_max ** (1 / self.rho)
-        ) # t (t_n+1) and t2(t_n) here is randomly generated based on indices
-        t = t**self.rho # t_n+1 
-        x_t_batch = x_0_repeat + noise * append_dims(t, dims) # basically is x_start + noise
+        # === Step 1: get target x_0 ===
+        x_T = th.randn((B, D), device=self.device) * self.sigma_max
+        s_in = th.ones(B, device=self.device)
+        x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, D]
 
-        s_in = x_T.new_ones([x_t_batch.shape[0], x_t_batch.shape[1]]) # stands for sigma input
-        x_t_batch_samples = self.denoise(model, x_t_batch, t, state_repeat)[1]
+        # === Step 2: generate KDE samples from independently sampled x_T ===
+        state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=N, dim=1)  # [B, N, obs_dim]
+        x_0_kde = self.batch_multi_sample(model=model, state=state_rpt).detach()  # [B, N, D]
 
-        x_0_exp = x_0.unsqueeze(1).detach()  # [B, 1, action_dim]
-        sq_dist = ((x_0_exp - x_t_batch_samples) ** 2).sum(dim=2)  # [B, N]
+        # === Step 3: compute true KDE log prob ===
+        x_0_exp = x_0.unsqueeze(1)  # [B, 1, D]
+        sq_dist = ((x_0_exp - x_0_kde) ** 2).mean(dim=2)  # [B, N]
 
-        D = x_0.shape[1]
-        log_kernel = -sq_dist / (2 * sigma ** 2) - D * math.log(sigma * math.sqrt(2 * math.pi))
-        log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)
+        # log gaussian kernel with normalization constant
+        log_norm_const = -D * math.log(sigma * math.sqrt(2 * math.pi))  # scalar
+        log_kernel = -sq_dist / (2 * sigma ** 2) + log_norm_const  # [B, N]
 
-        return x_0, log_prob, x_t_batch_samples  # log_prob: [B]
+        log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)  # [B]
+
+        return x_0, log_prob, x_0_kde
     
     def contrastive_loss(
         self,
@@ -285,7 +276,7 @@ class Consistency_Model:
         Returns:
             noise: 噪声 tensor，shape 同 denoised
         """
-        sigma = th.exp(log_epsilon)                        # [B, D]
+        sigma = th.exp(log_epsilon) # [B, D]
         direction = th.randn(shape, device=state.device)
         direction = direction / (direction.norm(dim=1, keepdim=True) + 1e-8)
         return sigma * direction  # element-wise scale
