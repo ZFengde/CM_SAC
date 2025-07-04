@@ -160,29 +160,16 @@ class Consistency_Model:
         denoised = th.tanh(denoised + noise) # TODO, think about where to put this part
         return model_output, denoised
     
-    def batch_denoise(self, model, x_t, sigmas, state): # get clean output from x_t
-        c_skip, c_out, c_in = [
-            append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(sigmas)
-        ]
-        rescaled_t = 1000 * 0.25 * th.log(sigmas + 1e-44)
-        model_output = model(c_in * x_t, rescaled_t, state)
-
-        denoised = c_out * model_output + c_skip * x_t 
-        log_epsilon = model.log_epsilon(state.float())
-        noise = self.generate_directional_noise(log_epsilon, state, denoised.shape)
-        denoised = th.tanh(denoised + noise)
-        return model_output, denoised
-
     def sample(self, model, state): # get clean output from x_T
         x_0 = self.sample_onestep(model, state)
         return x_0
     
-    def sample_onestep(self, model, state):
+    def sample_onestep(self, model, state): # This is for sampling B * D
         x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
         s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
         return self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
     
-    def batch_multi_sample(self, model, state): # 
+    def batch_multi_sample(self, model, state): # This is for sampling B * N * D
         x_T = th.randn((state.shape[0], state.shape[1], self.action_dim), device=self.device) * self.sigma_max
         s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
@@ -191,7 +178,7 @@ class Consistency_Model:
     def sample_log_prob(self, model, state, N=100, sigma=0.1):
         B, D = state.shape[0], self.action_dim
 
-        # === Step 1: get target x_0 ===
+        # === Step 1: get a sample x_0 ===
         x_T = th.randn((B, D), device=self.device) * self.sigma_max
         s_in = th.ones(B, device=self.device)
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, D]
@@ -236,6 +223,7 @@ class Consistency_Model:
             0, num_scales - 1, (x_start.shape[0],), device=x_start.device
         ) # random 
 
+        # TODO, could make t larger
         t = self.sigma_max ** (1 / self.rho) + indices / (num_scales - 1) * (
             self.sigma_min ** (1 / self.rho) - self.sigma_max ** (1 / self.rho)
         ) # t (t_n+1) and t2(t_n) here is randomly generated based on indices

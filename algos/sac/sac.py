@@ -194,7 +194,7 @@ class SAC(OffPolicyAlgorithm):
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 # add entropy term
-                # next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
+                next_q_values = next_q_values - ent_coef * next_log_prob.detach().reshape(-1, 1)
                 # next_q_values = next_q_values -  next_log_prob.reshape(-1, 1)
                 # td error + entropy term
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
@@ -214,32 +214,11 @@ class SAC(OffPolicyAlgorithm):
             self.critic.optimizer.step()
 
             # Compute actor loss
-            # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
-            # Min over all critic networks
-            # q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
-            # min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            # # actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
-            # actor_loss = (- min_qf_pi).mean()
-            compute_contrasitive_loss = functools.partial(self.consistency_model.contrastive_loss,
-                                            model=self.actor,
-                                            x_start=actions_pi.detach(),
-                                            num_scales=40,
-                                            target_model=self.actor_target,
-                                            state=replay_data.observations,
-                                            )
-            contrasitive_loss = compute_contrasitive_loss() # but here take loss rather than consistency_loss
-
-            # TODO, consistency loss need to be modify here, since it's actually a regression learning
-            # which take actions from buffer as the ground truth
-            # actor_loss = (bc_losses["bounded_cm_loss"] - self.critic.q1_forward(replay_data.observations, sampled_action)).mean()
-            # actor_loss = contrasitive_loss["contrastive_loss"]
             q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
             min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            # actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
             actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
             # actor_loss = (contrasitive_loss["contrastive_loss"] - min_qf_pi).mean()
             actor_losses.append(actor_loss.item())
-            contrasitive_losses.append(contrasitive_loss["contrastive_loss"].mean().item())
 
             # Optimize the actor
             self.actor.optimizer.zero_grad()
@@ -261,8 +240,7 @@ class SAC(OffPolicyAlgorithm):
         self.logger.record("train/ent_coef", np.mean(ent_coefs))
         self.logger.record("train/actor_loss", np.mean(actor_losses))
         self.logger.record("train/critic_loss", np.mean(critic_losses))
-        self.logger.record("train/log_prob", np.mean(log_probs)) # log_prob大，contrasitive_losses就大 
-        self.logger.record("train/contrasitive_losses", np.mean(contrasitive_losses))
+        self.logger.record("train/log_prob", np.mean(log_probs)) 
         if len(ent_coef_losses) > 0:
             self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
 

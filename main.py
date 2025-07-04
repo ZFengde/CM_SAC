@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--env_id', type=str, default='Humanoid-v3') 
     parser.add_argument('--algo', type=str, default='SAC') 
     parser.add_argument('--n_envs', type=int, default=1)
-    parser.add_argument('--iter_num', type=int, default=10) # One iter will be timestep=batch_size=1e6
+    parser.add_argument('--iter_num', type=int, default=20) # One iter will be timestep=batch_size=1e6
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--learning_rate', type=float, default=3e-4)
     args = parser.parse_args()
