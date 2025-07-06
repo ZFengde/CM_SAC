@@ -197,7 +197,7 @@ class Consistency_Model:
 
         log_prob = th.logsumexp(log_kernel, dim=1) - math.log(N)  # [B]
 
-        return x_0, log_prob, x_0_kde
+        return x_0, log_prob
     
     def contrastive_loss(
         self,

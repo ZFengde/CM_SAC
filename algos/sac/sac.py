@@ -109,7 +109,8 @@ class SAC(OffPolicyAlgorithm):
         # Target entropy is used when learning the entropy coefficient
         if self.target_entropy == "auto":
             # automatically set target entropy if needed
-            self.target_entropy = float(-np.prod(self.env.action_space.shape).astype(np.float32))  # type: ignore
+            # self.target_entropy = float(-np.prod(self.env.action_space.shape).astype(np.float32))  # type: ignore
+            self.target_entropy = float(-np.sqrt(np.prod(self.env.action_space.shape)))
         else:
             # Force conversion
             # this will also throw an error for unexpected string
@@ -151,15 +152,14 @@ class SAC(OffPolicyAlgorithm):
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
-        log_probs, contrasitive_losses = [], []
+        log_probs = []
 
         for gradient_step in range(gradient_steps):
             # Sample replay buffer
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
             # Action by the current actor for the sampled state
-            # actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            actions_pi, log_prob, x_t_batch_samples = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.observations)
+            actions_pi, log_prob = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.observations)
             log_prob = log_prob.reshape(-1, 1)
             log_probs.append(log_prob.mean().item())
 
@@ -169,6 +169,7 @@ class SAC(OffPolicyAlgorithm):
                 # so we don't change it with other losses
                 # see https://github.com/rail-berkeley/softlearning/issues/60
                 ent_coef = th.exp(self.log_ent_coef.detach())
+                assert isinstance(self.target_entropy, float)
                 ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
                 ent_coef_losses.append(ent_coef_loss.item())
             else:
@@ -185,17 +186,12 @@ class SAC(OffPolicyAlgorithm):
 
             with th.no_grad():
                 # Select action according to policy
-                # next_actions, next_log_prob = self.actor.action_log_prob(replay_data.next_observations)
-                next_actions, next_log_prob, next_x_t_batch_samples = self.consistency_model.sample_log_prob(model=self.actor, state=replay_data.next_observations)
-                # noise = replay_data.actions.clone().data.normal_(0, 0.2)
-                # noise = noise.clamp(-0.5, 0.5)
-                # next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
+                next_actions, next_log_prob = self.consistency_model.sample_log_prob(model=self.actor_target, state=replay_data.next_observations)
                 # Compute the next Q values: min over all critics targets
                 next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
                 next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 # add entropy term
                 next_q_values = next_q_values - ent_coef * next_log_prob.detach().reshape(-1, 1)
-                # next_q_values = next_q_values -  next_log_prob.reshape(-1, 1)
                 # td error + entropy term
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
