@@ -63,7 +63,6 @@ class Actor(BasePolicy):
         self.clip_mean = clip_mean
 
         action_dim = get_action_dim(self.action_space)
-        last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
         self.mu =  MLP(state_dim=self.features_dim, action_dim=action_dim)
@@ -103,16 +102,14 @@ class Actor(BasePolicy):
         else:
             features = self.extract_features(obs, self.features_extractor) # flatten
         return self.mu(x, time, features)
-        # mean_actions, log_epsilon, kwargs = self.get_action_dist_params(obs)
-        # # Note: the action is squashed
-        # return self.action_dist.actions_from_params(mean_actions, log_epsilon, deterministic=deterministic, **kwargs)
-        # # features = self.extract_features(obs, self.features_extractor)
-        # # latent_pi = self.latent_pi(features)
-        # # return self.mu(latent_pi)
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         return self(observation, deterministic)
 
+    def get_log_epsilon(self, input):
+        log_epsilon = self.log_epsilon(input.float())
+        log_epsilon = th.clamp(log_epsilon, log_epsilon_MIN, log_epsilon_MAX)
+        return log_epsilon
 
 class SACPolicy(BasePolicy):
 

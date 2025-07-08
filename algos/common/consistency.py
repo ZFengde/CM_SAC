@@ -155,7 +155,7 @@ class Consistency_Model:
 
         denoised = c_out * model_output + c_skip * x_t 
         # TODO, add a uniform distribution layer
-        log_epsilon = model.log_epsilon(state.float())
+        log_epsilon = model.get_log_epsilon(state.float())
         noise = self.generate_directional_noise(log_epsilon, state, denoised.shape)
         denoised = th.tanh(denoised + noise) # TODO, think about where to put this part
         return model_output, denoised
@@ -255,16 +255,9 @@ class Consistency_Model:
         return terms
     
     def generate_directional_noise(self, log_epsilon, state, shape):
-        """
-        使用模型中的 log_std 对输出加入 direction-based 噪声
-        Args:
-            model: 模型，要求有 log_epsilon(state) 输出 [B, D] 的 log_std
-            state: 输入状态 [B, obs_dim]
-            shape: denoised 的 shape，用于匹配维度 [B, D]
-        Returns:
-            noise: 噪声 tensor，shape 同 denoised
-        """
-        sigma = th.exp(log_epsilon) # [B, D]
-        direction = th.randn(shape, device=state.device)
-        direction = direction / (direction.norm(dim=1, keepdim=True) + 1e-8)
-        return sigma * direction  # element-wise scale
+        sigma = th.exp(log_epsilon)  # [B, D]
+        direction = F.normalize(
+            th.randn(shape, device=state.device),
+            p=2, dim=1, eps=1e-6
+        )
+        return sigma * direction
