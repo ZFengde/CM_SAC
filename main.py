@@ -42,7 +42,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_id', type=str, default='Hopper-v3') 
-    parser.add_argument('--algo', type=str, default='SAC') 
+    parser.add_argument('--algo', type=str, default='CM_SAC') 
     parser.add_argument('--n_envs', type=int, default=1)
     parser.add_argument('--iter_num', type=int, default=20) # One iter will be 1e6
     parser.add_argument('--seed', type=int, default=0)

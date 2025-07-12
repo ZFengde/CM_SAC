@@ -1,1 +1,1 @@
-from algos.sac import SAC
+from algos.cm_sac import CM_SAC

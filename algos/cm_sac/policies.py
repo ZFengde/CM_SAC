@@ -111,7 +111,7 @@ class Actor(BasePolicy):
         log_epsilon = th.clamp(log_epsilon, log_epsilon_MIN, log_epsilon_MAX)
         return log_epsilon
 
-class SACPolicy(BasePolicy):
+class CM_SACPolicy(BasePolicy):
 
     actor: Actor
     actor_target: Actor
@@ -274,7 +274,7 @@ class SACPolicy(BasePolicy):
         self.training = mode
 
 
-MlpPolicy = SACPolicy
+MlpPolicy = CM_SACPolicy
 
 class MLP(nn.Module):
     def __init__(self,

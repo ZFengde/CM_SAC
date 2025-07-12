@@ -13,17 +13,17 @@ from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from algos.common.buffers import ReplayBuffer
 from algos.common.off_policy_algorithm import OffPolicyAlgorithm
 from algos.common.policies import BasePolicy, ContinuousCritic
-from algos.sac.policies import Actor, MlpPolicy, SACPolicy
+from algos.cm_sac.policies import Actor, MlpPolicy, CM_SACPolicy
 
-SelfSAC = TypeVar("SelfSAC", bound="SAC")
+SelfCM_SAC = TypeVar("SelfCM_SAC", bound="CM_SAC")
 
 
-class SAC(OffPolicyAlgorithm):
+class CM_SAC(OffPolicyAlgorithm):
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
         "MlpPolicy": MlpPolicy,
     }
-    policy: SACPolicy
+    policy: CM_SACPolicy
     actor: Actor
     actor_target: Actor
     critic: ContinuousCritic
@@ -31,7 +31,7 @@ class SAC(OffPolicyAlgorithm):
 
     def __init__(
         self,
-        policy: Union[str, Type[SACPolicy]],
+        policy: Union[str, Type[CM_SACPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
@@ -240,14 +240,14 @@ class SAC(OffPolicyAlgorithm):
             self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
 
     def learn(
-        self: SelfSAC,
+        self: SelfCM_SAC,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "SAC",
+        tb_log_name: str = "CM_SAC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfSAC:
+    ) -> SelfCM_SAC:
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,
