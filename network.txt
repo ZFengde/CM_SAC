@@ -1,57 +1,57 @@
 SACPolicy(
-Actor(
-  (features_extractor): FlattenExtractor(
-    (flatten): Flatten(start_dim=1, end_dim=-1)
-  )
-  (latent_pi): Sequential(
-    (0): Linear(in_features=393, out_features=256, bias=True)
-    (1): ReLU()
-    (2): Linear(in_features=256, out_features=256, bias=True)
-    (3): ReLU()
-  )
-  (mu): Linear(in_features=256, out_features=1, bias=True)
-  (log_std): Linear(in_features=256, out_features=1, bias=True)
-)
-  
-(critic): ContinuousCritic(
+  Actor(
     (features_extractor): FlattenExtractor(
       (flatten): Flatten(start_dim=1, end_dim=-1)
     )
-    (qf0): Sequential(
+    (latent_pi): Sequential(
       (0): Linear(in_features=393, out_features=256, bias=True)
       (1): ReLU()
       (2): Linear(in_features=256, out_features=256, bias=True)
       (3): ReLU()
-      (4): Linear(in_features=256, out_features=1, bias=True)
     )
-    (qf1): Sequential(
-      (0): Linear(in_features=393, out_features=256, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=256, out_features=256, bias=True)
-      (3): ReLU()
-      (4): Linear(in_features=256, out_features=1, bias=True)
+    (mu): Linear(in_features=256, out_features=1, bias=True)
+    (log_std): Linear(in_features=256, out_features=1, bias=True)
+  )
+    
+  (critic): ContinuousCritic(
+      (features_extractor): FlattenExtractor(
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+      )
+      (qf0): Sequential(
+        (0): Linear(in_features=393, out_features=256, bias=True)
+        (1): ReLU()
+        (2): Linear(in_features=256, out_features=256, bias=True)
+        (3): ReLU()
+        (4): Linear(in_features=256, out_features=1, bias=True)
+      )
+      (qf1): Sequential(
+        (0): Linear(in_features=393, out_features=256, bias=True)
+        (1): ReLU()
+        (2): Linear(in_features=256, out_features=256, bias=True)
+        (3): ReLU()
+        (4): Linear(in_features=256, out_features=1, bias=True)
+      )
+    )
+  (critic_target): ContinuousCritic(
+      (features_extractor): FlattenExtractor(
+        (flatten): Flatten(start_dim=1, end_dim=-1)
+      )
+      (qf0): Sequential(
+        (0): Linear(in_features=393, out_features=256, bias=True)
+        (1): ReLU()
+        (2): Linear(in_features=256, out_features=256, bias=True)
+        (3): ReLU()
+        (4): Linear(in_features=256, out_features=1, bias=True)
+      )
+      (qf1): Sequential(
+        (0): Linear(in_features=393, out_features=256, bias=True)
+        (1): ReLU()
+        (2): Linear(in_features=256, out_features=256, bias=True)
+        (3): ReLU()
+        (4): Linear(in_features=256, out_features=1, bias=True)
+      )
     )
   )
-(critic_target): ContinuousCritic(
-    (features_extractor): FlattenExtractor(
-      (flatten): Flatten(start_dim=1, end_dim=-1)
-    )
-    (qf0): Sequential(
-      (0): Linear(in_features=393, out_features=256, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=256, out_features=256, bias=True)
-      (3): ReLU()
-      (4): Linear(in_features=256, out_features=1, bias=True)
-    )
-    (qf1): Sequential(
-      (0): Linear(in_features=393, out_features=256, bias=True)
-      (1): ReLU()
-      (2): Linear(in_features=256, out_features=256, bias=True)
-      (3): ReLU()
-      (4): Linear(in_features=256, out_features=1, bias=True)
-    )
-  )
-)
 
 In the original SAC, there is a tanh in the sample, to make it output between [-1, 1]
 ----------------------------------------------------------------------
@@ -125,7 +125,7 @@ TD3Policy(
 
 ----------------------------------------------------------------------
 CM_SAC(
-  (actor): Actor(
+    Actor(
     (features_extractor): FlattenExtractor(
       (flatten): Flatten(start_dim=1, end_dim=-1)
     )
@@ -133,19 +133,37 @@ CM_SAC(
       (time_mlp): Sequential(
         (0): SinusoidalPosEmb()
         (1): Linear(in_features=16, out_features=32, bias=True)
-        (2): Mish()
+        (2): ReLU()
         (3): Linear(in_features=32, out_features=16, bias=True)
       )
       (layers): Sequential(
         (0): Linear(in_features=409, out_features=256, bias=True)
-        (1): Mish()
+        (1): ReLU()
         (2): Linear(in_features=256, out_features=256, bias=True)
-        (3): Mish()
+        (3): ReLU()
         (4): Linear(in_features=256, out_features=17, bias=True)
-        (5): Tanh()
       )
     )
-    (log_std): Linear(in_features=256, out_features=17, bias=True)
+    (log_epsilon): Linear(in_features=376, out_features=17, bias=True)
+  )
+    ContinuousCritic(
+    (features_extractor): FlattenExtractor(
+      (flatten): Flatten(start_dim=1, end_dim=-1)
+    )
+    (qf0): Sequential(
+      (0): Linear(in_features=393, out_features=256, bias=True)
+      (1): ReLU()
+      (2): Linear(in_features=256, out_features=256, bias=True)
+      (3): ReLU()
+      (4): Linear(in_features=256, out_features=1, bias=True)
+    )
+    (qf1): Sequential(
+      (0): Linear(in_features=393, out_features=256, bias=True)
+      (1): ReLU()
+      (2): Linear(in_features=256, out_features=256, bias=True)
+      (3): ReLU()
+      (4): Linear(in_features=256, out_features=1, bias=True)
+    )
   )
 )
 

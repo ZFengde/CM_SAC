@@ -156,36 +156,41 @@ class Consistency_Model:
         denoised = c_out * model_output + c_skip * x_t 
         # TODO, add a uniform distribution layer
         log_epsilon = model.get_log_epsilon(state.float())
-        noise = self.generate_directional_noise(log_epsilon, state, denoised.shape)
+        noise = self.generate_directional_noise(log_epsilon, state, denoised.shape) # one epsilon per state
+        raw_output = denoised + noise
         denoised = th.tanh(denoised + noise) # TODO, think about where to put this part
-        return model_output, denoised
+        return raw_output, denoised
     
-    def sample(self, model, state): # get clean output from x_T
-        x_0 = self.sample_onestep(model, state)
-        return x_0
-    
-    def sample_onestep(self, model, state): # This is for sampling B * D
+    def sample(self, model, state, with_raw=False): # get clean output from x_T
         x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
         s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
-        return self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
+        x_0_raw, x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)
+        if with_raw:
+            return x_0_raw, x_0
+        else:
+            return x_0
     
-    def batch_multi_sample(self, model, state): # This is for sampling B * N * D
+    def batch_multi_sample(self, model, state, with_raw=False): # This is for sampling B * N * D
         x_T = th.randn((state.shape[0], state.shape[1], self.action_dim), device=self.device) * self.sigma_max
         s_in = x_T.new_ones([x_T.shape[0]]) # stands for sigma input
-        x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
-        return x_0
+        x_0_raw, x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)
+        if with_raw:
+            return x_0_raw, x_0
+        else:
+            return x_0
     
     def sample_log_prob(self, model, state, N=100, sigma=0.1):
-        B, D = state.shape[0], self.action_dim
+        B, D = state.shape[0], self.action_dim # should i compute the prob before tanh()
 
         # === Step 1: get a sample x_0 ===
         x_T = th.randn((B, D), device=self.device) * self.sigma_max
         s_in = th.ones(B, device=self.device)
-        x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]  # [B, D]
+        x_0_raw, x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)  # [B, D]
 
         # === Step 2: generate KDE samples from independently sampled x_T ===
         state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=N, dim=1)  # [B, N, obs_dim]
-        x_0_kde = self.batch_multi_sample(model=model, state=state_rpt).detach()  # [B, N, D]
+        x_0_kde_raw, x_0_kde = self.batch_multi_sample(model=model, state=state_rpt, with_raw=True)  # [B, N, D]
+        x_0_kde = x_0_kde.detach()
 
         # === Step 3: compute true KDE log prob ===
         x_0_exp = x_0.unsqueeze(1)  # [B, 1, D]
@@ -255,9 +260,9 @@ class Consistency_Model:
         return terms
     
     def generate_directional_noise(self, log_epsilon, state, shape):
-        sigma = th.exp(log_epsilon)  # [B, D]
+        epsilon = th.exp(log_epsilon)  # [B, D]
         direction = F.normalize(
             th.randn(shape, device=state.device),
             p=2, dim=1, eps=1e-6
         )
-        return sigma * direction
+        return epsilon * direction
