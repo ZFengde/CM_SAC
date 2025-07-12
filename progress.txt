@@ -14,3 +14,7 @@ TODO, 对于每个不同的state以及x_T输出不同的权重，后者有必要
 
 1. 目前正在测试用mean方法的kde, it's ok，加入uniform调节之后也ok，但是如果在next action中加入prob会崩溃
 2. 准备测试contrastive loss
+3. 正在测试将激活函数从mish变为relu，效果不好
+
+看看为什么我的td3效果不好
+1. 现在可以确定是我的TD3有问题，跟原版有差别
