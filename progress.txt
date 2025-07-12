@@ -16,5 +16,6 @@ TODO, 对于每个不同的state以及x_T输出不同的权重，后者有必要
 2. 准备测试contrastive loss
 3. 正在测试将激活函数从mish变为relu，效果不好
 
-看看为什么我的td3效果不好
-1. 现在可以确定是我的TD3有问题，跟原版有差别
+看看为什么我的td3效果不好 ✅
+1. 现在可以确定是我的TD3有问题，跟原版有差别 ✅
+2. train_freq: Union[int, Tuple[int, str]] = 从1, 改成 (1, "episode"), 就一模一样了 ✅
