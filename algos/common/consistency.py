@@ -126,14 +126,20 @@ class Consistency_Model:
         distiller_target = target_denoise_fn(x_t2, t2, state) # predicted target based on t2=t_n
         distiller_target = distiller_target.detach()
         
-        state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=1, dim=1)
-        multi_actions = self.batch_multi_sample(model=model, state=state_rpt)
-        q_value = critic.q1_batch_forward(state_rpt, multi_actions)
-        multi_q_losses = - q_value.mean()
+        snrs = self.get_snr(t) # sigmas**-2
+        weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
+        # t 越小， weights越大
+        consistency_diffs = (distiller - distiller_target) ** 2 # get the consistency difference
+        consistency_loss = mean_flat(consistency_diffs) * weights # weighted average as loss
+
+        # state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=1, dim=1)
+        # multi_actions = self.batch_multi_sample(model=model, state=state_rpt)
+        # q_value = critic.q1_batch_forward(state_rpt, multi_actions)
+        # multi_q_losses = - q_value.mean()
 
         terms = {}
-        terms["multi_q_losses"] = multi_q_losses
-        terms["consistency_losses"] = multi_q_losses
+        # terms["multi_q_losses"] = multi_q_losses
+        terms["consistency_losses"] = consistency_loss
 
         # distance = th.norm(distiller - x_start, dim=1, keepdim=True) recover distance
         # distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)

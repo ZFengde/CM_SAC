@@ -212,7 +212,17 @@ class CM_SAC(OffPolicyAlgorithm):
             # Compute actor loss
             q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
             min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
+            compute_cm_losses = functools.partial(self.consistency_model.consistency_losses,
+                                              model=self.actor,
+                                              x_start=replay_data.actions,
+                                              num_scales=40,
+                                              target_model=self.actor_target,
+                                              state=replay_data.observations,
+                                              )
+            cm_losses = compute_cm_losses()
+
+            # minimise cm_loss, log_prob, maximise Q
+            actor_loss = (cm_losses["consistency_losses"] + ent_coef * log_prob - min_qf_pi).mean() 
             actor_losses.append(actor_loss.item())
 
             # Optimize the actor
